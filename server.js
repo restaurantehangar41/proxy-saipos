@@ -1,26 +1,44 @@
 import express from "express";
-import fetch from "node-fetch";
 
 const app = express();
 app.use(express.json());
 
-app.post("/saipos", async (req, res) => {
+// 🔐 variáveis de ambiente
+const SAIPOS_BASE_URL = process.env.SAIPOS_BASE_URL;
+const SAIPOS_TOKEN = process.env.SAIPOS_TOKEN;
+
+// ✅ rota principal (teste)
+app.get("/", (req, res) => {
+  res.send("✅ Proxy SAIPOS rodando");
+});
+
+// 🚀 proxy
+app.all("/saipos/*", async (req, res) => {
   try {
-    const response = await fetch("https://api.saipos.com/SEU_ENDPOINT", {
-      method: "POST",
+    const endpoint = req.params[0];
+
+    const response = await fetch(`${SAIPOS_BASE_URL}/${endpoint}`, {
+      method: req.method,
       headers: {
-        "Authorization": "Bearer SEU_TOKEN",
+        "Authorization": `Bearer ${SAIPOS_TOKEN}`,
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(req.body)
+      body: ["GET", "DELETE"].includes(req.method)
+        ? undefined
+        : JSON.stringify(req.body)
     });
 
-    const data = await response.json();
-    res.json(data);
+    const data = await response.text();
+    res.status(response.status).send(data);
 
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-app.listen(3000, () => console.log("Proxy rodando"));
+// 🚪 porta obrigatória
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Rodando na porta ${PORT}`);
+});
