@@ -1,23 +1,44 @@
 import express from "express";
+import cors from "cors";
 
 const app = express();
+
+app.use(cors());
 app.use(express.json());
 
 // 🔐 variáveis de ambiente
 const SAIPOS_BASE_URL = process.env.SAIPOS_BASE_URL;
 const SAIPOS_TOKEN = process.env.SAIPOS_TOKEN;
 
-// ✅ rota principal (teste)
+// 🧪 health check
 app.get("/", (req, res) => {
   res.send("✅ Proxy SAIPOS rodando");
 });
 
-// 🚀 proxy
+// 🌍 opcional: ver IP do servidor (debug)
+app.get("/ip", async (req, res) => {
+  try {
+    const response = await fetch("https://ifconfig.me");
+    const ip = await response.text();
+    res.send(ip);
+  } catch (err) {
+    res.status(500).send("Erro ao obter IP");
+  }
+});
+
+// 🚀 proxy principal
 app.all("/saipos/*", async (req, res) => {
   try {
     const endpoint = req.params[0];
 
-    const response = await fetch(`${SAIPOS_BASE_URL}/${endpoint}`, {
+    // 🔥 query params (ESSENCIAL)
+    const queryString = new URLSearchParams(req.query).toString();
+
+    const url = `${SAIPOS_BASE_URL}/${endpoint}${
+      queryString ? `?${queryString}` : ""
+    }`;
+
+    const response = await fetch(url, {
       method: req.method,
       headers: {
         "Authorization": `Bearer ${SAIPOS_TOKEN}`,
@@ -28,11 +49,24 @@ app.all("/saipos/*", async (req, res) => {
         : JSON.stringify(req.body)
     });
 
-    const data = await response.text();
+    const contentType = response.headers.get("content-type");
+
+    let data;
+    if (contentType && contentType.includes("application/json")) {
+      data = await response.json();
+    } else {
+      data = await response.text();
+    }
+
     res.status(response.status).send(data);
 
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Erro no proxy:", error);
+
+    res.status(500).json({
+      error: "Erro no proxy",
+      details: error.message
+    });
   }
 });
 
@@ -40,5 +74,5 @@ app.all("/saipos/*", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Rodando na porta ${PORT}`);
+  console.log(`🚀 Proxy rodando na porta ${PORT}`);
 });
